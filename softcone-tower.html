@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>소프트콘 타워</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Fredoka:wght@500;600;700&family=Gowun+Dodum&display=swap">
+<style>
+/* 레이아웃: 3D 무대가 화면 전체. 위 얇은 제목줄, 아래 얇은 조작줄, 카메라는 오른쪽. 3D는 그 사이 빈 공간에 맞춰 크게 그려짐 */
+:root{
+  --paper:#f7f1e6; --ink:#3e2c22; --sage:#3f5f57; --sage-soft:#dfe7e2;
+  --star:#e2a52c; --danger:#c9473f; --rule:rgba(62,44,34,.14);
+  --f-display:"Jua","Gowun Dodum",system-ui,sans-serif;
+  --f-num:"Fredoka","Jua",system-ui,sans-serif;
+  --f-body:"Gowun Dodum","Jua",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--paper)}
+body{color:var(--ink);font-family:var(--f-body);-webkit-user-select:none;user-select:none}
+button{font:inherit;color:inherit}
+button:focus-visible{outline:2px solid var(--sage);outline-offset:3px}
+
+.stage{position:fixed;inset:0;touch-action:none}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ruler{pointer-events:none}
+
+.head{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:8px;padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right));pointer-events:none}
+.head button{pointer-events:auto}
+.title{font-family:var(--f-display);font-weight:400;font-size:24px;color:var(--sage);margin:0}
+.head-right{display:flex;align-items:center;gap:16px;font-size:14px}
+.head-right b{font-family:var(--f-num);font-weight:600;font-size:17px;color:var(--sage);font-variant-numeric:tabular-nums}
+.textbtn{background:none;border:0;padding:4px 0;cursor:pointer;color:rgba(62,44,34,.65);text-decoration:underline;text-underline-offset:4px}
+.msg{position:fixed;left:0;right:0;text-align:center;font-family:var(--f-display);font-size:22px;color:var(--sage);pointer-events:none;opacity:0;transition:opacity .25s}
+.msg.show{opacity:1}
+.msg.warn{color:var(--danger)}
+
+.dock{position:fixed;left:0;right:0;bottom:0;display:flex;align-items:flex-end;justify-content:center;gap:28px;flex-wrap:wrap;padding-top:10px;padding-bottom:max(16px,env(safe-area-inset-bottom));padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right))}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
+.hint{font-size:14px;color:rgba(62,44,34,.7);margin:0;text-align:center}
+.flavors{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.flavor{display:flex;align-items:center;gap:6px;padding:6px 11px 6px 6px;border-radius:999px;border:1px solid var(--rule);background:#fffaf2;cursor:pointer;font-size:14px}
+.flavor .sw{width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
+.flavor[aria-pressed="true"]{border-color:var(--sage);box-shadow:0 0 0 1px var(--sage) inset}
+.btn{font-family:var(--f-display);font-size:18px;padding:11px 20px;border-radius:12px;cursor:pointer;border:1.5px solid var(--sage)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--sage);color:var(--paper)}
+.btn.ghost{background:#fffaf2;color:var(--sage)}
+.btn:disabled{opacity:.45;cursor:wait}
+.status{font-size:12px;color:rgba(62,44,34,.6);margin:0;text-align:center;min-height:1.2em}
+.col{display:flex;flex-direction:column;gap:8px;align-items:center}
+
+.meter{display:flex;align-items:baseline;gap:10px}
+.meter .num{font-family:var(--f-num);font-weight:700;font-size:52px;line-height:1;color:var(--sage);font-variant-numeric:tabular-nums}
+.meter .num span{font-size:22px;font-weight:600;margin-left:4px}
+.meter .num.bump{animation:bump .4s ease-out}
+@keyframes bump{40%{transform:scale(1.06)}}
+.starrow{display:flex;gap:2px}
+.starrow i{font-style:normal;font-size:20px;color:rgba(62,44,34,.15)}
+.starrow i.on{color:var(--star)}
+.next{font-size:12px;color:rgba(62,44,34,.6)}
+.balance{display:flex;flex-direction:column;gap:6px;width:min(280px,70vw)}
+.balance .bar{position:relative;height:10px;border-radius:5px;background:linear-gradient(90deg,#efc9c3,#f3e7c9 30%,var(--sage-soft) 42%,var(--sage-soft) 58%,#f3e7c9 70%,#efc9c3)}
+.balance .bar::after{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:rgba(62,44,34,.35)}
+.balance .dot{position:absolute;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:var(--ink);left:50%}
+.balance .line{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px}
+.balance .state{font-family:var(--f-display);font-size:15px}
+.hints{display:flex;gap:12px;font-size:12px;color:rgba(62,44,34,.6)}
+.hints .on{color:var(--sage);font-weight:600}
+.serve-btn{font-family:var(--f-display);font-size:16px;padding:8px 14px;border-radius:10px;border:1.5px solid var(--star);background:#fbe9c4;cursor:pointer}
+.serve-btn:disabled{opacity:.4;cursor:not-allowed}
+
+#cam{position:fixed;right:max(20px,env(safe-area-inset-right));top:max(60px,calc(env(safe-area-inset-top) + 50px));width:clamp(220px,22vw,320px);border-radius:14px;overflow:hidden;background:#222;box-shadow:0 6px 24px rgba(62,44,34,.18)}
+#cam canvas{width:100%;height:auto;aspect-ratio:4/3;display:block}
+#cam .cap{position:absolute;left:8px;right:8px;bottom:8px;display:flex;justify-content:space-between;font-size:12px}
+#cam .cap span{background:rgba(247,241,230,.92);padding:3px 8px;border-radius:8px}
+#cam .vring{position:absolute;right:8px;top:8px;width:34px;height:34px}
+
+.result-stars{display:flex;gap:4px}
+.result-stars i{font-style:normal;font-size:38px;color:rgba(62,44,34,.13);transform:scale(.4);opacity:0}
+.result-stars i.show{animation:pop .4s cubic-bezier(.3,1.6,.5,1) forwards}
+.result-stars i.on{color:var(--star)}
+@keyframes pop{to{transform:scale(1);opacity:1}}
+.rank{font-family:var(--f-display);font-size:24px;margin:0}
+.rheight{font-size:15px;margin:0;color:var(--sage)}
+.rheight b{font-family:var(--f-num);font-weight:700;font-size:32px;font-variant-numeric:tabular-nums}
+.rbest{font-size:12px;color:rgba(62,44,34,.6);margin:0}
+
+/* 좁은 화면: 카메라를 오른쪽 아래에 작게, 조작줄은 그 왼쪽 */
+@media (max-width:760px){
+  #cam{top:auto;bottom:max(14px,env(safe-area-inset-bottom));right:max(12px,env(safe-area-inset-right));width:128px}
+  .app-play .dock{justify-content:flex-start;padding-right:156px;gap:10px}
+  .meter .num{font-size:38px}
+  .title{font-size:20px}
+  .hints{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition:none!important}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<main class="stage" id="stageWrap">
+  <canvas id="stage"></canvas>
+  <canvas id="ruler"></canvas>
+</main>
+
+<header class="head" id="head">
+  <h1 class="title">소프트콘 타워</h1>
+  <div class="head-right">
+    <span>최고 <b id="bestPill">0.0</b> cm</span>
+    <button class="textbtn" id="btnSound">소리 끄기</button>
+  </div>
+</header>
+<div class="msg" id="toast"></div>
+
+<div class="dock" id="dock">
+  <!-- 시작 -->
+  <div class="col" id="menu">
+    <p class="hint">주먹 쥐면 짜기 · 좌우로 움직여 균형 · 브이로 마무리 · 별을 딸수록 빨라져요</p>
+    <div class="flavors" id="flavors"></div>
+    <div class="row">
+      <button class="btn primary" id="btnHand">카메라로 시작</button>
+      <button class="btn ghost" id="btnMouse">마우스로 시작</button>
+    </div>
+    <p class="status" id="status"></p>
+  </div>
+
+  <!-- 플레이 -->
+  <div class="meter" id="meter" hidden>
+    <div class="num" id="hNum">0.0<span>cm</span></div>
+    <div class="col" style="align-items:flex-start;gap:2px">
+      <div class="starrow" id="starRow"><i>★</i><i>★</i><i>★</i><i>★</i><i>★</i></div>
+      <div class="next"><b id="lvl" style="color:var(--sage)">레벨 1</b> · <span id="nextStar"></span></div>
+    </div>
+  </div>
+  <div class="balance" id="balance" hidden>
+    <div class="line"><span class="state" id="balState">안정</span><button class="serve-btn" id="btnServe" disabled>마무리</button></div>
+    <div class="bar"><div class="dot" id="needle"></div></div>
+    <div class="hints"><span id="chipSqueeze">주먹 · 짜기</span><span id="chipServe">브이 · 마무리</span></div>
+  </div>
+
+  <!-- 결과 -->
+  <div class="col" id="result" hidden>
+    <div class="result-stars" id="bigStars"><i>★</i><i>★</i><i>★</i><i>★</i><i>★</i></div>
+    <p class="rank" id="rRank">소프트콘 장인</p>
+    <p class="rheight">이번 높이 <b id="rHeight">0.0</b> cm</p>
+    <p class="rbest" id="rBest"></p>
+    <div class="row">
+      <button class="btn primary" id="btnAgain">다시 짜기</button>
+      <button class="btn ghost" id="btnHome">처음으로</button>
+    </div>
+  </div>
+</div>
+
+<div id="cam" hidden>
+  <canvas id="camCanvas" width="640" height="480"></canvas>
+  <svg class="vring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="rgba(247,241,230,.85)" stroke="rgba(62,44,34,.15)" stroke-width="3"/><circle id="vProg" cx="18" cy="18" r="15" fill="none" stroke="#e2a52c" stroke-width="3" stroke-dasharray="94.2" stroke-dashoffset="94.2" transform="rotate(-90 18 18)"/></svg>
+  <div class="cap"><span id="camHand">손을 찾는 중</span><span id="camGesture">—</span></div>
+</div>
+<div id="app" hidden></div>
+<video id="video" playsinline muted hidden></video>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const lerp = (a,b,t) => a + (b-a)*t;
+
+/* ================= 설정 ================= */
+const FLAVORS = [
+  {id:'vanilla', name:'바닐라', a:'#f4ecdb', b:'#f4ecdb'},
+  {id:'twist',   name:'반반',   a:'#f4ecdb', b:'#9b6a4c'},
+  {id:'choco',   name:'초코',   a:'#9b6a4c', b:'#9b6a4c'},
+  {id:'berry',   name:'딸기',   a:'#f7c6cf', b:'#f7c6cf'},
+  {id:'matcha',  name:'녹차',   a:'#c9dcae', b:'#c9dcae'},
+];
+const STARS = [8, 16, 25, 35, 45];   // 별 기준 높이(cm)
+const RANKS = ['흘려버린 콘','알바 첫날','동네 아이스크림 고수','소프트콘 장인','아이스크림 명인','전설의 타워 마스터'];
+
+const PPT = 36;                 // 한 바퀴당 점 개수
+const DPHI = Math.PI*2/PPT;
+const PITCH = 1.5;              // 한 바퀴당 올라가는 높이(cm)
+const TUBE_R = 0.92;            // 크림 줄기 두께(반지름 cm)
+const RAD = 22;                // 단면 분할
+const CH = PPT*2;               // 메쉬 조각 하나 = 2바퀴
+const ALPHA0 = Math.PI/3;       // 노즐이 크림을 내려놓는 방향
+const TURN_RATE = 0.9;          // 초당 바퀴 수
+const CONE_RANGE = 12;          // 콘 좌우 이동 범위(cm)
+const FLOOR_Y = -12;
+
+let flavor = FLAVORS[0];
+let best = 0;
+try { best = +localStorage.getItem('softcone3d-best') || 0 } catch(e) {}
+$('bestPill').textContent = best.toFixed(1);
+
+/* ================= 렌더러 & 장면 ================= */
+const canvas = $('stage');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(1.5, devicePixelRatio));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 600);
+camera.position.set(0, 10, 60);
+
+// 배경: 페이지와 같은 크림색 단색
+scene.background = new THREE.Color('#f7f1e6');
+scene.fog = new THREE.Fog(0xf7f1e6, 120, 320);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+// 조명
+scene.add(new THREE.HemisphereLight(0xfff8ee, 0xd8c4a6, 1.1));
+const key = new THREE.SpotLight(0xfff1dc, 1.9, 0, 0.5, 0.8, 0);
+key.position.set(10, 95, 30); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); key.shadow.camera.near = 20; key.shadow.camera.far = 200; key.shadow.bias = -0.0004; key.shadow.radius = 6;
+scene.add(key); scene.add(key.target);
+const rim = new THREE.DirectionalLight(0xffffff, 0.5); rim.position.set(-30, 30, -40); scene.add(rim);
+const warm = new THREE.DirectionalLight(0xffe2c0, 0.45); warm.position.set(40, 10, 20); scene.add(warm);
+
+// 바닥 & 금빛 링
+const floor = new THREE.Mesh(new THREE.CircleGeometry(120, 96),
+  new THREE.ShadowMaterial({opacity:0.12}));
+floor.rotation.x = -Math.PI/2; floor.position.y = FLOOR_Y; floor.receiveShadow = true; scene.add(floor);
+/* ================= 콘 ================= */
+function waffleTex(){
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#d49a55'; g.fillRect(0,0,256,256);
+  g.strokeStyle = '#9c5f27'; g.lineWidth = 9;
+  for (let i=-256;i<512;i+=42){ g.beginPath(); g.moveTo(i,0); g.lineTo(i+256,256); g.stroke(); g.beginPath(); g.moveTo(i+256,0); g.lineTo(i,256); g.stroke(); }
+  g.strokeStyle = 'rgba(255,220,160,.35)'; g.lineWidth = 2;
+  for (let i=-256;i<512;i+=42){ g.beginPath(); g.moveTo(i+5,0); g.lineTo(i+261,256); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 2.5); t.anisotropy = 8; return t;
+}
+const waffleMat = new THREE.MeshStandardMaterial({map:waffleTex(), roughness:0.75, envMapIntensity:0.3});
+const coneGroup = new THREE.Group(); scene.add(coneGroup);
+const coneMesh = new THREE.Mesh(new THREE.ConeGeometry(3.1, 9.5, 64, 1, true), waffleMat);
+coneMesh.rotation.x = Math.PI; coneMesh.position.y = -4.75; coneMesh.castShadow = true; coneGroup.add(coneMesh);
+const coneRim = new THREE.Mesh(new THREE.TorusGeometry(3.1, 0.32, 16, 64), new THREE.MeshStandardMaterial({color:0xc98b47, roughness:.7}));
+coneRim.rotation.x = Math.PI/2; coneGroup.add(coneRim);
+const coneFill = new THREE.Mesh(new THREE.CircleGeometry(3.05, 48), new THREE.MeshStandardMaterial({color:0xe9d9b9, roughness:.6}));
+coneFill.rotation.x = -Math.PI/2; coneFill.position.y = -0.1; coneGroup.add(coneFill);
+
+/* ================= 노즐 (사진 속 세이지색 파이프) ================= */
+const nozzle = new THREE.Group(); scene.add(nozzle);
+const sageMat = new THREE.MeshStandardMaterial({color:0x5b7a71, roughness:.38, metalness:.25, envMapIntensity:.8});
+const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 120, 32), sageMat); pipe.position.y = 62.6; pipe.castShadow = true; nozzle.add(pipe);
+const collar = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 1.9, 40), sageMat); collar.position.y = 1.6; collar.castShadow = true; nozzle.add(collar);
+const lip = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, 0.7, 40), sageMat); lip.position.y = 0.35; nozzle.add(lip);
+const goldBand = new THREE.Mesh(new THREE.TorusGeometry(1.56, 0.08, 8, 48), new THREE.MeshStandardMaterial({color:0xe8b04a, metalness:1, roughness:.25, emissive:0x3a2306}));
+goldBand.rotation.x = Math.PI/2; goldBand.position.y = 2.55; nozzle.add(goldBand);
+
+/* ================= 크림 탑 ================= */
+const creamMat = new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.62, metalness:0, envMapIntensity:0.35});
+const leanGroup = new THREE.Group(); scene.add(leanGroup);
+const spinGroup = new THREE.Group(); leanGroup.add(spinGroup);
+const streamMesh = new THREE.Mesh(new THREE.BufferGeometry(), creamMat); streamMesh.castShadow = true; scene.add(streamMesh);
+
+let colA = new THREE.Color(), colB = new THREE.Color();
+function setFlavor(f){ flavor = f; colA.set(f.a); colB.set(f.b); }
+setFlavor(flavor);
+
+// 튜브 생성기: 살짝 납작한 둥근 단면을 경로를 따라 밀어냄 (법선은 직접 계산해 이음매 없이 매끈하게)
+const _t = new THREE.Vector3(), _n = new THREE.Vector3(), _b = new THREE.Vector3(), _up = new THREE.Vector3(0,1,0);
+function tubeGeometry(pts, scaleAt, gIndexAt, getPrev, getNext){
+  const N = pts.length;
+  const pos = new Float32Array(N*RAD*3), nor = new Float32Array(N*RAD*3), col = new Float32Array(N*RAD*3);
+  const RV = 0.82, RH = 1.12;   // 세로는 눌리고 가로는 퍼진 크림 단면
+  for (let i=0;i<N;i++){
+    const p = pts[i];
+    const pa = getPrev(i), pb = getNext(i);
+    _t.subVectors(pb, pa); if (_t.lengthSq() < 1e-8) _t.set(1,0,0); _t.normalize();
+    _b.crossVectors(_t, _up); if (_b.lengthSq() < 1e-6) _b.set(0,0,1); _b.normalize();
+    _n.crossVectors(_b, _t).normalize();          // _n ≈ 위쪽, _b ≈ 옆쪽
+    const gi = gIndexAt(i), s = scaleAt(i)*TUBE_R;
+    const shift = Math.round(gi*0.05/(Math.PI*2)*RAD);
+    for (let j=0;j<RAD;j++){
+      const ph = j/RAD*Math.PI*2;
+      const cx = Math.cos(ph), sx = Math.sin(ph);
+      const groove = 1 + 0.03*Math.cos(6*ph);
+      const rn = s*RV*groove, rb = s*RH*groove;
+      const k = (i*RAD + j)*3;
+      pos[k]   = p.x + _n.x*cx*rn + _b.x*sx*rb;
+      pos[k+1] = p.y + _n.y*cx*rn + _b.y*sx*rb;
+      pos[k+2] = p.z + _n.z*cx*rn + _b.z*sx*rb;
+      // 타원 법선
+      let nx = _n.x*cx/RV + _b.x*sx/RH, ny = _n.y*cx/RV + _b.y*sx/RH, nz = _n.z*cx/RV + _b.z*sx/RH;
+      const L = Math.hypot(nx,ny,nz) || 1; nor[k] = nx/L; nor[k+1] = ny/L; nor[k+2] = nz/L;
+      const useB = ((j + shift) % RAD + RAD) % RAD >= RAD/2;
+      const c = useB ? colB : colA;
+      col[k] = c.r; col[k+1] = c.g; col[k+2] = c.b;
+    }
+  }
+  const idx = [];
+  for (let i=0;i<N-1;i++) for (let j=0;j<RAD;j++){
+    const a = i*RAD + j, b = i*RAD + (j+1)%RAD, c = (i+1)*RAD + j, d = (i+1)*RAD + (j+1)%RAD;
+    idx.push(a, b, c, b, d, c);   // 바깥쪽을 향하도록
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor,3));
+  g.setAttribute('color', new THREE.BufferAttribute(col,3));
+  g.setIndex(idx);
+  return g;
+}
+
+/* ================= 게임 상태 ================= */
+let P = [], CEN = [], SC = [], chunks = [];
+let finishing = false, finishDone = false, finishK0 = 0, finishR0 = 2;
+const FIN = Math.round(PPT*1.7);   // 마무리 꼭지: 원을 좁히며 1.7바퀴
+let sx=0, sy=0, sz=0;
+let psi = 0, phiAcc = 0;
+let theta = 0, omega = 0, noiseF = 0, noiseT = 0, noiseTarget = 0;
+let coneX = 0, coneV = 0, coneA = 0, targetX = 0;
+let nozX = 0, nozY = 8;
+let squeezing = false, state = 'menu';
+let blobs = [];
+let fallT = 0, fallen = false, lastStars = 0, lastTurn = 0;
+let level = 1, squeezeTime = 0, gustT = 5;
+let camShake = 0, orbit = 0, menuSpin = 0;
+let inputMode = 'mouse';
+
+function resetTower(){
+  for (const m of chunks){ if (m){ spinGroup.remove(m); m.geometry.dispose(); } }
+  chunks = []; P = []; CEN = []; SC = []; sx=sy=sz=0; psi=0; phiAcc=0;
+  finishing = false; finishDone = false;
+  theta=0; omega=0; noiseF=0; coneX=0; coneV=0; coneA=0; targetX=0; nozX=0;
+  for (const b of blobs) scene.remove(b.m); blobs = [];
+  spinGroup.visible = true; streamMesh.visible = false;
+  fallen = false; lastStars = 0; lastTurn = 0; level = 1; squeezeTime = 0; gustT = 5;
+}
+
+const rotY = (x, z, a) => ({x: x*Math.cos(a) + z*Math.sin(a), z: -x*Math.sin(a) + z*Math.cos(a)});
+const helixR = t => t < 1 ? 2.35 - 0.25*t : Math.max(1.45, 2.1 - (t-1)*0.22);
+const towerHeight = () => P.length ? P[P.length-1].y + TUBE_R : 0;
+
+function rebuildChunk(ci){
+  const start = ci*CH, end = Math.min(P.length-1, (ci+1)*CH);
+  if (chunks[ci]){ spinGroup.remove(chunks[ci]); chunks[ci].geometry.dispose(); chunks[ci] = null; }
+  if (end - start < 1) return;
+  const pts = P.slice(start, end+1), n = P.length;
+  const g = tubeGeometry(pts,
+    i => { const gi = start+i; let s = (gi < 8 ? 0.35 + 0.65*gi/8 : 1)*(SC[gi] ?? 1); const tail = n-1-gi; if (tail < 5) s *= 0.3 + 0.7*tail/5; return s; },
+    i => start+i,
+    i => P[Math.max(0, start+i-1)], i => P[Math.min(n-1, start+i+1)]);
+  const m = new THREE.Mesh(g, creamMat); m.castShadow = true; m.receiveShadow = true;
+  spinGroup.add(m); chunks[ci] = m;
+}
+function afterAdd(){
+  const n = P.length; if (n < 2) return;
+  const cTail = Math.floor((n-2)/CH), cPrev = Math.floor(Math.max(0, n-7)/CH);
+  for (let c=cPrev;c<=cTail;c++) rebuildChunk(c);
+}
+
+// 노즐 위치를 탑(기울어진 좌표계) 기준으로 변환
+const _v = new THREE.Vector3();
+function nozzleLocalX(){
+  leanGroup.updateMatrixWorld();
+  _v.set(nozX, nozY, 0); leanGroup.worldToLocal(_v); return _v.x;
+}
+
+// 마무리: 나선 반지름을 0으로 좁히며 올라가다 끝을 살짝 말아 올린 뾰족한 꼭지
+// 크림은 탑 좌표계에 그대로 쌓고, 내려놓는 위치가 원을 그리며 돌아감 (탑은 돌지 않음)
+function addFinishPoint(pointPsi){
+  const k = P.length, j = k - finishK0;
+  if (j >= FIN + 8){ finishDone = true; return false; }
+  const cl = CEN[k-1];
+  const lastY = P[k-1].y, ang = ALPHA0 + pointPsi;
+  let plx, plz, y, sc;
+  if (j < FIN){
+    const u = j/FIN;
+    const R = finishR0*Math.pow(1-u, 1.15);
+    y = lastY + (PITCH/PPT)*(1 - 0.3*u);
+    sc = 1 - 0.62*u;
+    plx = cl.x + R*Math.cos(ang); plz = cl.z + R*Math.sin(ang);
+  } else {
+    const q = (j - FIN + 1)/8, r = 0.5*Math.sin(q*Math.PI*0.75);
+    y = lastY + 0.2*(1 - q*0.4);
+    sc = 0.38*(1 - q*0.75);
+    plx = cl.x + r*Math.cos(ang); plz = cl.z + r*Math.sin(ang);
+  }
+  P.push(new THREE.Vector3(plx, y, plz)); CEN.push(cl); SC.push(sc);
+  sx += plx; sy += y; sz += plz;
+  return true;
+}
+
+function addPoint(pointPsi, nozL){
+  if (finishing){ if (addFinishPoint(pointPsi)) afterAdd(); return; }
+  const k = P.length, turns = k/PPT;
+  const prev = k ? CEN[k-1] : {x:0, z:0};
+  if (k > PPT && Math.abs(nozL - prev.x) > 3.2){ spawnDrip(); return; }
+  const step = 0.9/PPT;
+  const cl = {x: prev.x + clamp(nozL - prev.x, -step, step), z: prev.z*0.985};
+  const R = helixR(turns), y = 0.55 + turns*PITCH, ang = ALPHA0 + pointPsi;
+  const plx = cl.x + R*Math.cos(ang), plz = cl.z + R*Math.sin(ang);
+  P.push(new THREE.Vector3(plx, y, plz)); CEN.push(cl); SC.push(1);
+  sx += plx; sy += y; sz += plz;
+  afterAdd();
+  const turn = Math.floor(P.length/PPT);
+  if (turn > lastTurn){ lastTurn = turn; Sound.tick(turn); }
+}
+
+function demoBuild(turns){
+  resetTower();
+  const total = Math.round(turns*PPT);
+  for (let k=0;k<total;k++){
+    const t = k/PPT, R = helixR(t), y = 0.55 + t*PITCH;
+    const wob = Math.sin(t*0.7)*0.25, ang = ALPHA0 + k*DPHI;
+    const p = new THREE.Vector3(wob + R*Math.cos(ang), y, R*Math.sin(ang));
+    P.push(p); CEN.push({x:wob, z:0}); SC.push(1);
+    sx += p.x; sy += y; sz += p.z;
+  }
+  // 시연 탑도 뾰족한 꼭지로 마무리
+  finishing = true; finishK0 = P.length; finishR0 = helixR(turns);
+  while (addFinishPoint(P.length*DPHI)) {}
+  finishing = false;
+  for (let c=0;c<=Math.floor((P.length-2)/CH);c++) rebuildChunk(c);
+}
+
+/* ================= 물리 ================= */
+function gaussian(){ return (Math.random()+Math.random()+Math.random()+Math.random()-2)*1.2; }
+
+function updatePlay(dt){
+  // 콘: 손 위치를 스프링으로 부드럽게 따라감
+  const k = 170, c = 25;
+  const tx = clamp(targetX, -CONE_RANGE, CONE_RANGE);
+  coneA = k*(tx - coneX) - c*coneV;
+  coneV += coneA*dt; coneX += coneV*dt;
+
+  const H = towerHeight(), n = P.length;
+  // 짜기
+  // 레벨: 별 하나마다 +1 → 짜는 속도·흔들림 증가, 오래 짤수록 조금씩 더 빨라짐
+  const newLevel = 1 + starsFor(H);
+  if (newLevel > level){ level = newLevel; toast(`레벨 ${level} · 더 빨리 짜져요`); Sound.ding(level-2); }
+  if (squeezing) squeezeTime += dt;
+  const rate = TURN_RATE*(1 + 0.2*(level-1))*(1 + Math.min(0.45, squeezeTime*0.012));
+  // 레벨 3부터 가끔 바람
+  if (level >= 3 && H > 3){
+    gustT -= dt;
+    if (gustT <= 0){
+      gustT = 3.5 + Math.random()*4 - (level-3)*0.6;
+      const dir = Math.random() < .5 ? -1 : 1;
+      omega += dir*(0.22 + 0.08*(level-3));
+      toast(dir > 0 ? '바람이 불어요 →' : '← 바람이 불어요', true);
+    }
+  }
+  if (squeezing && state === 'play'){
+    phiAcc += rate*Math.PI*2*dt;
+    const nozL = nozzleLocalX();
+    while (phiAcc >= DPHI){ phiAcc -= DPHI; psi += DPHI; addPoint(psi, nozL); }
+  }
+  // 무게중심 (탑 좌표계 x)
+  const vpsi = psi + phiAcc;
+  const comX = n ? sx/n : 0;
+
+  // 흔들림 노이즈: 높을수록, 짜는 중일수록 큼
+  noiseT -= dt;
+  if (noiseT <= 0){ noiseT = 0.22; noiseTarget = gaussian()*(squeezing ? 1 : 0.35)*(0.2 + H/24)*(1 + 0.22*(level-1)); }
+  noiseF = lerp(noiseF, noiseTarget, Math.min(1, dt*4));
+
+  const A = 0.18*H - 3.6 + 0.35*(level-1);
+  const ctrl = 0.032*(30/(H+30));
+  const alpha = A*theta + 5*comX/(H+8) + noiseF - 1.3*omega - ctrl*coneA;
+  omega += alpha*dt; theta += omega*dt;
+
+  if (Math.abs(theta) > 0.6 && H > 2) startFall();
+}
+
+function startFall(){
+  state = 'falling'; fallT = 0; fallen = true; squeezing = false;
+  Sound.squeeze(false); Sound.crash(); toast('와르르', true);
+  camShake = 1;
+}
+function updateFall(dt){
+  fallT += dt;
+  omega += (11*Math.sin(theta) - 0.3*omega)*dt; theta += omega*dt;
+  if (spinGroup.visible && Math.abs(theta) > 1.25) explode();
+  if (fallT > 2.3) showResult();
+}
+function explode(){
+  spinGroup.visible = false; streamMesh.visible = false;
+  leanGroup.updateMatrixWorld(); spinGroup.updateMatrixWorld();
+  const geo = new THREE.SphereGeometry(1, 20, 14);
+  for (let i=0;i<P.length;i+=10){
+    const w = P[i].clone(); spinGroup.localToWorld(w);
+    const useB = (i/10)%2 === 1;
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color:(useB?colB:colA).clone(), roughness:.62, envMapIntensity:.35}));
+    m.position.copy(w); m.scale.setScalar(0.7 + Math.random()*0.6); m.castShadow = true;
+    scene.add(m);
+    blobs.push({m, v:new THREE.Vector3(Math.sign(theta)*(6+Math.random()*10)+(Math.random()-.5)*8, Math.random()*8, (Math.random()-.5)*12), rest:false});
+  }
+  camShake = 1.2;
+}
+function spawnDrip(){
+  const d = new THREE.Vector3(nozX, nozY - 1, 0);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.75, 16, 12), new THREE.MeshStandardMaterial({color:colA.clone(), roughness:.62}));
+  m.position.copy(d); m.castShadow = true; scene.add(m);
+  blobs.push({m, v:new THREE.Vector3((Math.random()-.5)*2, -2, 0), rest:false});
+  omega += (Math.random()-.5)*0.3;
+  if (!dripCooldown){ toast('흘렸어요', true); dripCooldown = 1.2; }
+}
+let dripCooldown = 0;
+function updateBlobs(dt){
+  for (const b of blobs){
+    if (b.rest) continue;
+    b.v.y -= 40*dt; b.m.position.addScaledVector(b.v, dt);
+    if (b.m.position.y < FLOOR_Y + 0.4){
+      b.m.position.y = FLOOR_Y + 0.35; b.rest = true;
+      b.m.scale.set(b.m.scale.x*1.6, b.m.scale.y*0.45, b.m.scale.z*1.6);
+    }
+  }
+}
+
+/* ================= 결과 ================= */
+function starsFor(h){ return STARS.filter(s => h >= s).length; }
+function serve(){
+  if (state !== 'play' || towerHeight() < 2) return;
+  // 마무리 단계: 노즐이 원을 좁히며 뾰족한 꼭지를 짜 올림
+  state = 'finishing'; squeezing = false;
+  finishing = true; finishDone = false; finishK0 = P.length; finishR0 = helixR(P.length/PPT);
+  Sound.squeeze(true); toast('마무리 중');
+}
+function updateFinish(dt){
+  const k = 170, c = 25;
+  coneA = k*(clamp(targetX,-CONE_RANGE,CONE_RANGE) - coneX)*0.3 - c*coneV;
+  coneV += coneA*dt; coneX += coneV*dt;
+  omega *= 0.9; theta *= 0.96;
+  phiAcc += TURN_RATE*1.15*Math.PI*2*dt;
+  while (phiAcc >= DPHI && !finishDone){ phiAcc -= DPHI; psi += DPHI; addPoint(psi, 0); }
+  if (finishDone){
+    finishing = false; state = 'served';
+    Sound.squeeze(false); Sound.fanfare(); toast('완성');
+    setTimeout(showResult, 1300);
+  }
+}
+function showResult(){
+  if (state === 'result') return;
+  const h = towerHeight();
+  let stars = starsFor(h); if (fallen) stars = Math.max(0, stars - 2);
+  state = 'result';
+  $('meter').hidden = true; $('balance').hidden = true; $('cam').hidden = true; $('app').dataset.state = 'result'; document.body.className = '';
+  const isBest = !fallen && h > best;
+  if (isBest){ best = h; try{ localStorage.setItem('softcone3d-best', String(best)) }catch(e){} $('bestPill').textContent = best.toFixed(1); }
+  $('rRank').textContent = fallen ? '탑이 무너졌어요' : RANKS[stars];
+  $('rHeight').textContent = h.toFixed(1);
+  $('rBest').textContent = fallen ? `무너지면 별 2개가 빠져요 · 최고 기록 ${best.toFixed(1)}cm` : (isBest ? '새 최고 기록이에요' : `최고 기록 ${best.toFixed(1)}cm`);
+  const els = [...$('bigStars').children];
+  els.forEach(e => e.className = '');
+  $('result').hidden = false;
+  els.forEach((e,i) => setTimeout(() => {
+    e.classList.add('show'); if (i < stars){ e.classList.add('on'); Sound.ding(i); }
+  }, 350 + i*260));
+  setTimeout(() => $('btnAgain').focus(), 400);
+}
+
+/* ================= HUD ================= */
+const needle = $('needle'), balState = $('balState'), hNum = $('hNum');
+function hud(){
+  const h = towerHeight();
+  hNum.firstChild.nodeValue = h.toFixed(1);
+  const st = starsFor(h);
+  if (st > lastStars){ lastStars = st; hNum.classList.remove('bump'); void hNum.offsetWidth; hNum.classList.add('bump'); toast(`별 ${st}개`); Sound.ding(st-1); }
+  [...$('starRow').children].forEach((e,i) => e.classList.toggle('on', i < st));
+  $('lvl').textContent = '레벨 ' + level;
+  const nx = STARS.find(s => s > h);
+  $('nextStar').textContent = nx ? `다음 별까지 ${(nx - h).toFixed(1)}cm` : '별 다섯 개를 다 모았어요';
+  const lean = theta/0.6;
+  needle.style.left = (50 + clamp(lean,-1,1)*50) + '%';
+  const a = Math.abs(lean);
+  balState.textContent = a > .7 ? (lean > 0 ? '위험해요, 오른쪽으로 받쳐요' : '위험해요, 왼쪽으로 받쳐요') : a > .4 ? '조금 흔들려요' : '안정';
+  balState.style.color = a > .7 ? 'var(--danger)' : a > .4 ? '#a7741c' : 'var(--sage)';
+  needle.style.background = a > .7 ? 'var(--danger)' : 'var(--ink)';
+  $('chipSqueeze').classList.toggle('on', squeezing);
+  $('btnServe').disabled = !(state === 'play' && h >= 2);
+}
+let toastTimer;
+function toast(text, warn=false){
+  const t = $('toast'); t.textContent = text; t.className = 'msg show' + (warn ? ' warn' : '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1300);
+}
+
+/* ================= 높이 자 (3D 좌표에 맞춘 눈금) ================= */
+const rc = $('ruler'), rctx = rc.getContext('2d');
+const _p = new THREE.Vector3();
+function project(x,y,z){ _p.set(x,y,z).project(camera); return {x:(_p.x*.5+.5)*SW, y:(-_p.y*.5+.5)*SH}; }
+function drawRuler(){
+  const dpr = Math.min(2, devicePixelRatio);
+  if (rc.width !== Math.round(SW*dpr) || rc.height !== Math.round(SH*dpr)){ rc.width = Math.round(SW*dpr); rc.height = Math.round(SH*dpr); }
+  rctx.setTransform(dpr,0,0,dpr,0,0); rctx.clearRect(0,0,SW,SH);
+  if (state === 'menu') return;
+  const h = towerHeight(), top = Math.max(h + 6, 12);
+  const X = -9.5;
+  const b = project(X, 0, 0), t = project(X, top, 0);
+  rctx.strokeStyle = 'rgba(62,44,34,.3)'; rctx.lineWidth = 1;
+  rctx.beginPath(); rctx.moveTo(b.x, b.y); rctx.lineTo(t.x, t.y); rctx.stroke();
+  rctx.font = '500 12px "Fredoka", sans-serif'; rctx.textBaseline = 'middle';
+  for (let cm=0; cm<=top; cm++){
+    const p = project(X, cm, 0);
+    const len = cm%10===0 ? 12 : cm%5===0 ? 8 : 4;
+    rctx.strokeStyle = 'rgba(62,44,34,' + (cm%5===0 ? .5 : .25) + ')';
+    rctx.beginPath(); rctx.moveTo(p.x, p.y); rctx.lineTo(p.x+len, p.y); rctx.stroke();
+    if (cm%10===0){ rctx.textAlign = 'right'; rctx.fillStyle = 'rgba(62,44,34,.6)'; rctx.fillText(cm, p.x-6, p.y); }
+  }
+  // 별 기준 (자 오른쪽에 작은 별)
+  rctx.textAlign = 'left'; rctx.font = '13px sans-serif';
+  for (let i=0;i<STARS.length;i++){
+    const st = STARS[i]; if (st > top) break;
+    const p = project(X, st, 0);
+    rctx.fillStyle = h >= st ? '#e2a52c' : 'rgba(62,44,34,.25)'; rctx.fillText('★', p.x+14, p.y);
+  }
+  // 최고 기록
+  if (best > 0 && best <= top){
+    const p = project(X, best, 0);
+    rctx.strokeStyle = '#c9473f'; rctx.lineWidth = 2;
+    rctx.beginPath(); rctx.moveTo(p.x-4, p.y); rctx.lineTo(p.x+12, p.y); rctx.stroke(); rctx.lineWidth = 1;
+    rctx.fillStyle = '#c9473f'; rctx.font = '500 11px "Fredoka", sans-serif'; rctx.textAlign = 'right'; rctx.fillText('최고', p.x-8, p.y);
+  }
+  // 현재 높이 화살표
+  if (h > 0){
+    const p = project(X, h, 0);
+    rctx.fillStyle = '#3f5f57';
+    rctx.beginPath(); rctx.moveTo(p.x+1, p.y); rctx.lineTo(p.x+10, p.y-5); rctx.lineTo(p.x+10, p.y+5); rctx.closePath(); rctx.fill();
+  }
+}
+
+/* ================= 카메라 ================= */
+const camLook = new THREE.Vector3(0, 6, 0);
+function updateCamera(dt){
+  measureInsets();
+  const h = Math.max(towerHeight(), 6);
+  const yLo = -10.2, yHi = h + (state === 'menu' || state === 'result' ? 3 : 6.5);  // 콘 끝 ~ 꼭대기(+노즐)
+  const spanY = yHi - yLo, spanX = 22;
+  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+  const fit = Math.max((spanY/2)/tanV, (spanX/2)/(tanV*camera.aspect)) * 1.04;
+  const lookY = (yLo + yHi)/2;
+  if (state === 'menu' || state === 'result') orbit += dt*0.18; else orbit = lerp(orbit, 0, dt*2);
+  // 살짝 내려다보는 각도 (눈높이 보정 포함)
+  const pos = new THREE.Vector3(Math.sin(orbit)*fit + camLook.x, lookY + 3, Math.cos(orbit)*fit);
+  camera.position.lerp(pos, Math.min(1, dt*2.2));
+  const lx = (state === 'play' || state === 'finishing' || state === 'falling') ? coneX*0.6 : 0;
+  camLook.lerp(new THREE.Vector3(lx, lookY, 0), Math.min(1, dt*2.5));
+  if (camShake > 0){
+    camShake = Math.max(0, camShake - dt*1.5);
+    camera.position.x += (Math.random()-.5)*camShake; camera.position.y += (Math.random()-.5)*camShake;
+  }
+  camera.lookAt(camLook);
+}
+
+/* ================= 메인 루프 ================= */
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.033, (now - last)/1000); last = now;
+  if (inputMode === 'hand') trackHand(dt);
+  dripCooldown = Math.max(0, dripCooldown - dt);
+
+  if (state === 'play') updatePlay(dt);
+  else if (state === 'finishing') updateFinish(dt);
+  else if (state === 'falling') updateFall(dt);
+  else if (state === 'served' || state === 'result'){ coneV *= 0.9; coneX += coneV*dt; omega *= 0.95; theta *= 0.97; }
+  else if (state === 'menu'){ }
+  if (state === 'menu' || state === 'result') menuSpin += dt*0.3; else menuSpin = 0;
+
+  // 장면 반영
+  coneGroup.position.x = coneX;
+  leanGroup.position.x = coneX;
+  leanGroup.rotation.z = -theta;
+  spinGroup.rotation.y = (state === 'menu' || state === 'result') ? menuSpin : 0;
+  updateBlobs(dt);
+
+  // 노즐: 탑 꼭대기를 따라감
+  const h = towerHeight();
+  leanGroup.updateMatrixWorld();
+  _v.set(0, h, 0); leanGroup.localToWorld(_v);
+  const lift = (state === 'served' || state === 'result') ? 14 : state === 'menu' ? 4 : 0;
+  if (state === 'play') nozX = lerp(nozX, _v.x, Math.min(1, dt*2.6));
+  else if (state !== 'falling') nozX = lerp(nozX, _v.x, Math.min(1, dt*2));
+  nozY = lerp(nozY, Math.max(_v.y, 0) + 5.6 + lift, Math.min(1, dt*3));
+  const wig = ((state === 'play' && squeezing) || state === 'finishing') ? 0.35 : 0;
+  const sa = ALPHA0 + psi + phiAcc;
+  nozzle.position.set(nozX + Math.cos(sa)*wig, nozY, Math.sin(sa)*wig);
+
+  // 노즐에서 나오는 크림 줄기
+  if (((state === 'play' && squeezing) || state === 'finishing') && P.length){
+    const n = P.length;
+    const lp = P[n-1].clone(); spinGroup.updateMatrixWorld(); spinGroup.localToWorld(lp);
+    // 지금 크림이 놓이는 방향(원의 접선) — 줄기가 그 방향으로 끌려가며 휘어짐
+    const prevP = P[Math.max(0, n-3)].clone(); spinGroup.localToWorld(prevP);
+    const tang = lp.clone().sub(prevP).setY(0); if (tang.lengthSq() < 1e-6) tang.set(1,0,0); tang.normalize();
+    const lead = lp.clone().addScaledVector(tang, 0.25*phiAcc/DPHI);
+    const swirl = ALPHA0 + psi + phiAcc;
+    const tip = new THREE.Vector3(nozX + Math.cos(swirl)*0.35, nozY, Math.sin(swirl)*0.35);
+    const curve = new THREE.CubicBezierCurve3(tip, tip.clone().add(new THREE.Vector3(0,-2.2,0)), lead.clone().add(new THREE.Vector3(0,1.6,0)).addScaledVector(tang,-1.1), lead);
+    const pts = curve.getPoints(14);
+    const thin = SC.length ? Math.max(0.35, SC[SC.length-1]) : 1;
+    const g = tubeGeometry(pts, i => (0.95 - i*0.008)*thin, i => P.length + i, i => pts[Math.max(0,i-1)], i => pts[Math.min(pts.length-1,i+1)]);
+    streamMesh.geometry.dispose(); streamMesh.geometry = g; streamMesh.visible = true;
+  } else if (state === 'play' && squeezing){
+    // 첫 짜기 전: 콘 위로 떨어지는 줄기
+    const sw = ALPHA0 + psi + phiAcc;
+    const tip = new THREE.Vector3(nozX, nozY, 0), end = new THREE.Vector3(coneX + 2.2*Math.cos(sw), 0.5, 2.2*Math.sin(sw));
+    const pts = new THREE.CubicBezierCurve3(tip, tip.clone().add(new THREE.Vector3(0,-2,0)), end.clone().add(new THREE.Vector3(0,2,0)), end).getPoints(14);
+    const g = tubeGeometry(pts, () => 0.9, i => i, i => pts[Math.max(0,i-1)], i => pts[Math.min(pts.length-1,i+1)]);
+    streamMesh.geometry.dispose(); streamMesh.geometry = g; streamMesh.visible = true;
+  } else streamMesh.visible = false;
+
+  // 무대 효과
+  key.target.position.set(coneX, h*0.5, 0);
+  updateCamera(dt);
+  if (state === 'play' || state === 'falling' || state === 'served' || state === 'finishing') hud();
+  composer.render();
+  drawRuler();
+  requestAnimationFrame(frame);
+}
+
+/* ================= 후처리 (은은한 빛번짐) ================= */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new OutputPass());
+const stageWrap = $('stageWrap');
+let SW = 1, SH = 1, insetT = 60, insetB = 160;
+function resize(){
+  SW = Math.max(1, innerWidth); SH = Math.max(1, innerHeight);
+  renderer.setSize(SW, SH, false); composer.setSize(SW, SH);
+}
+addEventListener('resize', resize); resize();
+// 위 제목줄 아래 ~ 아래 조작줄(좁은 화면에선 카메라 포함) 위까지가 3D 영역
+function measureInsets(){
+  const hb = $('head').getBoundingClientRect().bottom;
+  let top = SH - $('dock').getBoundingClientRect().height;
+  const cam = $('cam');
+  if (!cam.hidden && innerWidth <= 760) top = Math.min(top, cam.getBoundingClientRect().top - 8);
+  insetT = lerp(insetT, hb + 6, 0.2); insetB = lerp(insetB, SH - top + 6, 0.2);
+  const Hs = Math.max(120, SH - insetT - insetB);
+  camera.aspect = SW/Hs; camera.fov = 30;
+  camera.setViewOffset(SW, Hs, 0, -insetT, SW, SH);
+  camera.updateProjectionMatrix();
+  $('toast').style.top = (insetT + 4) + 'px';
+}
+addEventListener('resize', resize); resize();
+
+/* ================= 소리 (Web Audio) ================= */
+const Sound = (() => {
+  let ac = null, master, verb, sqGain, motorGain, muted = false;
+  function init(){
+    if (ac) return;
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    try { ac = new AC(); } catch(e){ ac = null; return; }
+    master = ac.createGain(); master.gain.value = 0.7; master.connect(ac.destination);
+    // 홀 잔향
+    verb = ac.createConvolver();
+    const len = ac.sampleRate*2.6, buf = ac.createBuffer(2, len, ac.sampleRate);
+    for (let ch=0;ch<2;ch++){ const d = buf.getChannelData(ch); for (let i=0;i<len;i++) d[i] = (Math.random()*2-1)*Math.pow(1-i/len, 2.4); }
+    verb.buffer = buf; const vg = ac.createGain(); vg.gain.value = 0.35; verb.connect(vg); vg.connect(master);
+    // 짜는 소리: 걸쭉한 노이즈 + 모터
+    const nb = ac.createBuffer(1, ac.sampleRate*2, ac.sampleRate); const nd = nb.getChannelData(0);
+    let lastv = 0; for (let i=0;i<nd.length;i++){ lastv = (lastv + 0.02*(Math.random()*2-1))/1.02; nd[i] = lastv*3.5; }
+    const ns = ac.createBufferSource(); ns.buffer = nb; ns.loop = true;
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 650;
+    sqGain = ac.createGain(); sqGain.gain.value = 0; ns.connect(lp); lp.connect(sqGain); sqGain.connect(master); ns.start();
+    const mo = ac.createOscillator(); mo.type = 'sawtooth'; mo.frequency.value = 58;
+    const mlp = ac.createBiquadFilter(); mlp.type = 'lowpass'; mlp.frequency.value = 220;
+    motorGain = ac.createGain(); motorGain.gain.value = 0; mo.connect(mlp); mlp.connect(motorGain); motorGain.connect(master); mo.start();
+  }
+  function tone(freq, t, dur, type='sine', vol=0.2, wet=true){
+    if (!ac || muted) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t+0.015); g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(master); if (wet) g.connect(verb); o.start(t); o.stop(t+dur+0.05);
+  }
+  const SCALE = [0,2,4,7,9];
+  return {
+    init,
+    toggle(){ muted = !muted; if (master) master.gain.value = muted ? 0 : 0.7; return muted; },
+    squeeze(on){ if (!ac) return; const t = ac.currentTime; sqGain.gain.setTargetAtTime(on && !muted ? 0.18 : 0, t, 0.05); motorGain.gain.setTargetAtTime(on && !muted ? 0.05 : 0, t, 0.08); },
+    tick(turn){ if (!ac) return; const i = (turn-1) % 15; const deg = SCALE[i%5] + 12*Math.floor(i/5);
+      const f = 392*Math.pow(2, deg/12); const t = ac.currentTime; tone(f, t, 0.9, 'sine', 0.12); tone(f*2, t, 0.4, 'sine', 0.03); },
+    ding(i){ if (!ac) return; const t = ac.currentTime; const f = 523.25*Math.pow(2, [0,4,7,12,16][clamp(i,0,4)]/12); tone(f, t, 1.4, 'triangle', 0.16); tone(f*1.5, t+0.02, 1, 'sine', 0.05); },
+    fanfare(){ if (!ac) return; const t = ac.currentTime;
+      const chords = [[261.6,329.6,392],[349.2,440,523.3],[392,493.9,587.3],[523.3,659.3,784,1046.5]];
+      chords.forEach((ch,i) => ch.forEach(f => tone(f, t + i*0.22, i===3?2.4:0.5, 'sawtooth', i===3?0.05:0.04)));
+      // 팀파니
+      [0,0.22,0.44,0.66].forEach((d,i) => { if (muted) return; const o = ac.createOscillator(), g = ac.createGain();
+        o.frequency.setValueAtTime(i===3?98:65, t+d); o.frequency.exponentialRampToValueAtTime(45, t+d+0.5);
+        g.gain.setValueAtTime(0.35, t+d); g.gain.exponentialRampToValueAtTime(0.001, t+d+0.8); o.connect(g); g.connect(master); g.connect(verb); o.start(t+d); o.stop(t+d+0.9); });
+    },
+    crash(){ if (!ac || muted) return; const t = ac.currentTime;
+      const b = ac.createBuffer(1, ac.sampleRate*1.2, ac.sampleRate), d = b.getChannelData(0);
+      for (let i=0;i<d.length;i++) d[i] = (Math.random()*2-1)*Math.pow(1-i/d.length, 2);
+      const s = ac.createBufferSource(); s.buffer = b; const f = ac.createBiquadFilter(); f.type='lowpass';
+      f.frequency.setValueAtTime(1800, t); f.frequency.exponentialRampToValueAtTime(120, t+1);
+      const g = ac.createGain(); g.gain.value = 0.5; s.connect(f); f.connect(g); g.connect(master); g.connect(verb); s.start(t);
+      tone(110, t, 0.9, 'sine', 0.3); tone(73, t+0.1, 1.2, 'sine', 0.3);
+    }
+  };
+})();
+$('btnSound').onclick = () => { Sound.init(); const m = Sound.toggle(); $('btnSound').textContent = m ? '소리 켜기' : '소리 끄기'; };
+
+/* ================= 입력: 마우스·키보드·터치 ================= */
+function mapX(clientX){ const r = stageWrap.getBoundingClientRect(); const n = clamp(((clientX - r.left)/r.width - 0.15)/0.7, 0, 1); return (n*2-1)*CONE_RANGE; }
+canvas.addEventListener('pointermove', e => { if (inputMode === 'mouse') targetX = mapX(e.clientX); });
+canvas.addEventListener('pointerdown', e => { if (inputMode === 'mouse' && state === 'play'){ targetX = mapX(e.clientX); setSqueeze(true); } });
+addEventListener('pointerup', () => { if (inputMode === 'mouse') setSqueeze(false); });
+addEventListener('keydown', e => {
+  if (state !== 'play') return;
+  if (e.code === 'Space'){ e.preventDefault(); setSqueeze(true); }
+  if (e.code === 'Enter') serve();
+  if (e.code === 'ArrowLeft') targetX -= 2.5;
+  if (e.code === 'ArrowRight') targetX += 2.5;
+});
+addEventListener('keyup', e => { if (e.code === 'Space' && inputMode === 'mouse') setSqueeze(false); });
+function setSqueeze(on){ if (state !== 'play') on = false; if (on !== squeezing){ squeezing = on; Sound.squeeze(on); } }
+$('btnServe').onclick = () => serve();
+
+/* ================= 손 인식 (MediaPipe) ================= */
+let landmarker = null, lastVT = -1, vHold = 0;
+const video = $('video'), camCtx = $('camCanvas').getContext('2d');
+async function setupHand(){
+  const st = $('status');
+  st.textContent = '카메라를 켜는 중…';
+  const stream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640}, height:{ideal:480}, facingMode:'user', frameRate:{ideal:30}}, audio:false});
+  video.srcObject = stream; await video.play();
+  st.textContent = '손 인식 모델을 불러오는 중… (처음엔 몇 초 걸려요)';
+  const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+  const fs = await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  const opts = d => ({baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate:d}, runningMode:'VIDEO', numHands:1, minHandDetectionConfidence:0.4, minHandPresenceConfidence:0.4, minTrackingConfidence:0.4});
+  try { landmarker = await vision.HandLandmarker.createFromOptions(fs, opts('GPU')); }
+  catch(e){ landmarker = await vision.HandLandmarker.createFromOptions(fs, opts('CPU')); }
+}
+// 화면 비율(4:3)을 맞춘 3D 거리 — 손이 기울어져도 손가락 접힘을 잘 판단
+const dist = (a,b) => Math.hypot((a.x-b.x)*1.333, a.y-b.y, (a.z-b.z)*1.333);
+// 손가락 끝이 둘째 마디보다 손목에 가까우면 접힘, 확실히 멀면 펴짐
+function fingerCurl(lm, tip, pip){ return dist(lm[tip], lm[0]) / Math.max(1e-4, dist(lm[pip], lm[0])); }
+const HAND_LINKS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+let fistOn = false, fistVotes = 0, lostT = 0, smoothHX = 0.5, vFrames = 0;
+function trackHand(dt){
+  if (!landmarker || video.readyState < 2) return;
+  camCtx.save(); camCtx.scale(-1,1); camCtx.drawImage(video, -640, 0, 640, 480); camCtx.restore();
+  if (video.currentTime === lastVT) return;
+  lastVT = video.currentTime;
+  const res = landmarker.detectForVideo(video, performance.now());
+  const lm = res.landmarks && res.landmarks[0];
+  if (!lm){
+    // 손이 잠깐 사라져도 0.35초는 기다렸다가 멈춤
+    lostT += 1/30;
+    if (lostT > 0.35){ $('camHand').textContent = '손을 보여주세요'; $('camGesture').textContent = '—'; fistOn = false; setSqueeze(false); vHold = 0; setVProg(0); }
+    return;
+  }
+  lostT = 0;
+  $('camHand').textContent = '손 인식 중';
+  // 위치: 손바닥 중심, 떨림 줄이기 + 가운데 60%만 써서 팔을 조금만 움직여도 됨
+  const palm = [0,5,9,13,17].map(i => lm[i]);
+  const hx = 1 - palm.reduce((s,p)=>s+p.x,0)/5;
+  const jump = Math.abs(hx - smoothHX);
+  smoothHX = lerp(smoothHX, hx, clamp(0.35 + jump*6, 0.35, 1));
+  targetX = (clamp((smoothHX - 0.2)/0.6, 0, 1)*2 - 1)*CONE_RANGE;
+  // 손가락 상태 (검지, 중지, 약지, 새끼)
+  const r = [[8,6],[12,10],[16,14],[20,18]].map(([t,p]) => fingerCurl(lm, t, p));
+  const curled = r.filter(v => v < 1.0).length;
+  const extended = r.filter(v => v > 1.12).length;
+  // 주먹 판정: 연속 2프레임 일치 + 켜고 끄는 기준을 다르게(깜빡임 방지)
+  const want = fistOn ? !(extended >= 3) : curled >= 3;
+  fistVotes = want === fistOn ? 0 : fistVotes + 1;
+  if (fistVotes >= 2){ fistOn = want; fistVotes = 0; }
+  setSqueeze(fistOn);
+  const isV = r[0] > 1.12 && r[1] > 1.12 && r[2] < 1.05 && r[3] < 1.05;
+  vFrames = isV ? vFrames + 1 : 0;
+  const vOn = vFrames >= 3;
+  $('camGesture').textContent = fistOn ? '짜는 중' : vOn ? '마무리 준비' : '멈춤';
+  if (vOn && state === 'play' && towerHeight() >= 2){ vHold += 1/30; if (vHold > 0.5){ vHold = 0; serve(); } } else vHold = Math.max(0, vHold - 0.05);
+  setVProg(vHold/0.5);
+  $('chipServe').classList.toggle('on', vOn);
+  // 손 뼈대
+  camCtx.strokeStyle = fistOn ? '#e2a52c' : '#ffffff'; camCtx.lineWidth = 4;
+  for (const [a,b] of HAND_LINKS){ camCtx.beginPath(); camCtx.moveTo((1-lm[a].x)*640, lm[a].y*480); camCtx.lineTo((1-lm[b].x)*640, lm[b].y*480); camCtx.stroke(); }
+  camCtx.fillStyle = '#3f5f57';
+  for (const p of lm){ camCtx.beginPath(); camCtx.arc((1-p.x)*640, p.y*480, 4, 0, Math.PI*2); camCtx.fill(); }
+}
+function setVProg(p){ $('vProg').setAttribute('stroke-dashoffset', String(94.2*(1-clamp(p,0,1)))); }
+
+/* ================= 화면 흐름 ================= */
+const flavorBox = $('flavors');
+for (const f of FLAVORS){
+  const b = document.createElement('button'); b.className = 'flavor'; b.type = 'button';
+  b.setAttribute('aria-pressed', f === flavor ? 'true' : 'false');
+  b.innerHTML = `<span class="sw" style="background:${f.a === f.b ? f.a : `linear-gradient(90deg,${f.a} 50%,${f.b} 50%)`}"></span>${f.name}`;
+  b.onclick = () => { setFlavor(f); [...flavorBox.children].forEach(c => c.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true'); demoBuild(15); };
+  flavorBox.appendChild(b);
+}
+
+function startGame(){
+  Sound.init();
+  resetTower();
+  $('menu').hidden = true; $('result').hidden = true;
+  $('meter').hidden = false; $('balance').hidden = false;
+  $('cam').hidden = inputMode !== 'hand';
+  $('app').dataset.state = 'play'; document.body.className = 'app-play';
+  $('chipSqueeze').textContent = inputMode === 'hand' ? '주먹 쥐기 · 짜기' : '마우스 누르기 · 짜기';
+  $('chipServe').textContent = inputMode === 'hand' ? '브이 · 마무리' : 'Enter · 마무리';
+  state = 'play'; toast('짜기 시작');
+}
+$('btnHand').onclick = async () => {
+  Sound.init();
+  if (landmarker){ inputMode = 'hand'; startGame(); return; }
+  $('btnHand').disabled = true;
+  try { await setupHand(); inputMode = 'hand'; $('status').textContent = ''; startGame(); }
+  catch(e){ console.error(e); $('status').textContent = '카메라나 손 인식을 시작하지 못했어요. 주소창의 카메라 권한을 허용했는지 확인하거나, 마우스로 시작해 보세요.'; }
+  $('btnHand').disabled = false;
+};
+$('btnMouse').onclick = () => { inputMode = 'mouse'; startGame(); };
+$('btnAgain').onclick = () => startGame();
+$('btnHome').onclick = () => {
+  state = 'menu'; $('result').hidden = true; $('menu').hidden = false; $('cam').hidden = true;
+  $('app').dataset.state = 'menu'; document.body.className = '';
+  demoBuild(15);
+};
+
+demoBuild(15);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
